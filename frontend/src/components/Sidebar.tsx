@@ -12,8 +12,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Eraser, Brush, Trash2, Maximize, Upload, Monitor, Map as MapIcon, Hand, Crosshair } from "lucide-react";
+import { Eraser, Brush, Trash2, Maximize, Upload, Monitor, Map as MapIcon, Hand, Crosshair, Pencil } from "lucide-react";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
 
 interface SidebarProps {
     maps: any[];
@@ -21,6 +22,7 @@ interface SidebarProps {
     onSelectMap: (id: string) => void;
     onUploadMap: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onDeleteMap: (id: string) => void;
+    onUpdateMap: (id: string, updates: any) => void;
     onToggleFog: (type: 'fill' | 'clear') => void;
     onSetTool: (tool: 'brush' | 'eraser') => void;
     selectedTool: 'brush' | 'eraser';
@@ -38,6 +40,7 @@ export default function Sidebar({
     onSelectMap,
     onUploadMap,
     onDeleteMap,
+    onUpdateMap,
     onToggleFog,
     onSetTool,
     selectedTool,
@@ -49,6 +52,8 @@ export default function Sidebar({
     onCenterMap
 }: SidebarProps) {
     const [mapToDelete, setMapToDelete] = useState<{ id: string; name: string } | null>(null);
+    const [editingMap, setEditingMap] = useState<{ id: string; name: string } | null>(null);
+    const [newName, setNewName] = useState("");
 
     const handleConfirmDelete = () => {
         if (mapToDelete) {
@@ -57,10 +62,22 @@ export default function Sidebar({
         }
     };
 
+    const handleStartRename = (map: any) => {
+        setEditingMap({ id: map._id, name: map.name });
+        setNewName(map.name);
+    };
+
+    const handleConfirmRename = () => {
+        if (editingMap && newName.trim()) {
+            onUpdateMap(editingMap.id, { name: newName.trim() });
+            setEditingMap(null);
+        }
+    };
+
     return (
         <div className="fixed left-0 top-0 h-full z-50 flex">
             {/* Persistent Toolbar on the left */}
-            <div className="h-full w-16 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center py-4 gap-4 text-white hover:w-16 transition-all">
+            <div className="h-full w-16 bg-zinc-900 border-r border-zinc-800 flex flex-col items-center py-4 gap-4 text-white">
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="outline" size="icon" className="mb-2 bg-blue-900/20 border-blue-500/50 hover:bg-blue-900/40 text-blue-400" title="Gestión de Mapas">
@@ -97,8 +114,20 @@ export default function Sidebar({
                                             className={`p-2 rounded cursor-pointer mb-2 flex items-center justify-between gap-1 ${activeMapId === map._id ? 'bg-zinc-800' : 'hover:bg-zinc-800/50'}`}
                                             onClick={() => onSelectMap(map._id)}
                                         >
-                                            <span className="truncate max-w-[120px] flex-1">{map.name}</span>
+                                            <span className="truncate max-w-[120px] flex-1 text-sm">{map.name}</span>
                                             <div className="flex items-center gap-0.5 shrink-0">
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-6 w-6 text-zinc-400 hover:text-white"
+                                                    title="Renombrar"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleStartRename(map);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-3 w-3" />
+                                                </Button>
                                                 <Button
                                                     size="icon"
                                                     variant={map.isActive ? "default" : "ghost"}
@@ -132,21 +161,6 @@ export default function Sidebar({
                         </div>
                     </SheetContent>
                 </Sheet>
-
-                <AlertDialog open={!!mapToDelete} onOpenChange={(open) => !open && setMapToDelete(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Eliminar mapa</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                ¿Está seguro de eliminar el mapa &quot;{mapToDelete?.name}&quot;? Esta acción no se puede deshacer.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700">Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleConfirmDelete}>Eliminar</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
 
                 <div className="h-px w-8 bg-zinc-700 my-2" />
 
@@ -203,7 +217,6 @@ export default function Sidebar({
 
                 <div className="h-px w-8 bg-zinc-700 my-2" />
 
-                {/* Brush Size Slider Indicator */}
                 <div className="flex flex-col items-center gap-2">
                     <span className="text-[10px] uppercase text-zinc-500">Size</span>
                     <Slider
@@ -216,6 +229,47 @@ export default function Sidebar({
                     />
                 </div>
 
+                <AlertDialog open={!!mapToDelete} onOpenChange={(open) => !open && setMapToDelete(null)}>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Eliminar mapa</AlertDialogTitle>
+                            <AlertDialogDescription className="text-zinc-400">
+                                ¿Está seguro de eliminar el mapa &quot;{mapToDelete?.name}&quot;? Esta acción no se puede deshacer.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700 text-white">Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={!!editingMap} onOpenChange={(open) => !open && setEditingMap(null)}>
+                    <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Renombrar mapa</AlertDialogTitle>
+                            <AlertDialogDescription className="text-zinc-400">
+                                Ingrese el nuevo nombre para &quot;{editingMap?.name}&quot;
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="py-4">
+                            <Input
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                className="bg-zinc-800 border-zinc-700 text-white"
+                                placeholder="Nombre del mapa"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleConfirmRename();
+                                }}
+                            />
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleConfirmRename} className="bg-blue-600 hover:bg-blue-700 text-white">Guardar</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </div>
     );

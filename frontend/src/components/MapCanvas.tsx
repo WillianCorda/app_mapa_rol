@@ -108,7 +108,7 @@ function VideoFrame({
         el.playsInline = true;
         el.setAttribute('crossOrigin', 'anonymous');
         // Respaldo: si algún navegador no respeta loop, volver a reproducir al terminar
-        el.addEventListener('ended', () => el.play().catch(() => {}));
+        el.addEventListener('ended', () => el.play().catch(() => { }));
         return el;
     }, [src]);
 
@@ -122,8 +122,8 @@ function VideoFrame({
         const id = requestAnimationFrame(() => {
             const layer = layerRef?.current;
             if (!layer) return;
-            videoEl.play().catch(() => {});
-            const anim = new Konva.Animation(() => {}, layer);
+            videoEl.play().catch(() => { });
+            const anim = new Konva.Animation(() => { }, layer);
             animRef.current = anim;
             anim.start();
         });
@@ -171,6 +171,10 @@ export default function MapCanvas({
     const isPanning = useRef(false);
     const lastPanPosition = useRef({ x: 0, y: 0 });
     const viewSyncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Mobile pinch-zoom state
+    const lastCenter = useRef<{ x: number, y: number } | null>(null);
+    const lastDist = useRef<number>(0);
 
     const displayScale = syncScale ?? scale;
     const displayPosition = syncPosition ?? position;
@@ -290,6 +294,17 @@ export default function MapCanvas({
         onViewChange?.({ scale: clampedScale, position: newPos });
     };
 
+    const getDistance = (p1: { x: number, y: number }, p2: { x: number, y: number }) => {
+        return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+    };
+
+    const getCenter = (p1: { x: number, y: number }, p2: { x: number, y: number }) => {
+        return {
+            x: (p1.x + p2.x) / 2,
+            y: (p1.y + p2.y) / 2,
+        };
+    };
+
     const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
         const stage = e.target.getStage();
         if (!stage) return;
@@ -330,6 +345,35 @@ export default function MapCanvas({
         setCurrentLine(newAction);
     };
 
+    const handleTouchStart = (e: Konva.KonvaEventObject<TouchEvent>) => {
+        const stage = e.target.getStage();
+        if (!stage) return;
+
+        const touches = e.evt.touches;
+
+        if (syncScale === undefined) {
+            if (touches.length === 1 && panMode) {
+                isPanning.current = true;
+                lastPanPosition.current = { x: touches[0].clientX, y: touches[0].clientY };
+            } else if (touches.length === 2) {
+                isPanning.current = false; // Stop 1-finger pan if 2nd finger added
+                const p1 = { x: touches[0].clientX, y: touches[1].clientX };
+                const p2 = { x: touches[0].clientY, y: touches[1].clientY };
+                // Re-calculating correctly for Konva touch data
+                const tp1 = { x: touches[0].clientX, y: touches[0].clientY };
+                const tp2 = { x: touches[1].clientX, y: touches[1].clientY };
+
+                lastDist.current = getDistance(tp1, tp2);
+                lastCenter.current = getCenter(tp1, tp2);
+            }
+        }
+
+        // Only draw if 1 finger and NOT in pan mode
+        if (isGm && selectedTool && !panMode && touches.length === 1) {
+            handleMouseDown(e);
+        }
+    };
+
     const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
         const stage = e.target.getStage();
         const point = stage?.getPointerPosition();
@@ -361,12 +405,52 @@ export default function MapCanvas({
         } : null);
     };
 
-    const handleMouseUp = () => {
-        // Stop panning
-        if (isPanning.current) {
-            isPanning.current = false;
-            return;
+    const handleTouchMove = (e: Konva.KonvaEventObject<TouchEvent>) => {
+        if (syncScale !== undefined) return;
+        const stage = stageRef.current;
+        if (!stage) return;
+
+        const touches = e.evt.touches;
+
+        if (touches.length === 2 && lastCenter.current) {
+            e.evt.preventDefault();
+            const tp1 = { x: touches[0].clientX, y: touches[0].clientY };
+            const tp2 = { x: touches[1].clientX, y: touches[1].clientY };
+
+            const dist = getDistance(tp1, tp2);
+            const center = getCenter(tp1, tp2);
+
+            const newScale = (dist / lastDist.current) * scale;
+            const clampedScale = Math.max(0.5, Math.min(5, newScale));
+
+            // Calculate position to keep center point stable
+            const stagePos = stage.position();
+            const pointTo = {
+                x: (lastCenter.current.x - stagePos.x) / scale,
+                y: (lastCenter.current.y - stagePos.y) / scale,
+            };
+
+            const newPos = {
+                x: center.x - pointTo.x * clampedScale,
+                y: center.y - pointTo.y * clampedScale,
+            };
+
+            setScale(clampedScale);
+            setPosition(newPos);
+            emitViewChange(clampedScale, newPos);
+
+            lastDist.current = dist;
+            lastCenter.current = center;
+        } else if (touches.length === 1) {
+            handleMouseMove(e);
         }
+    };
+
+    const handleMouseUp = () => {
+        // Stop panning and touch gestures
+        isPanning.current = false;
+        lastCenter.current = null;
+        lastDist.current = 0;
 
         // Stop drawing
         if (!isDrawing.current || !currentLine) return;
@@ -437,8 +521,8 @@ export default function MapCanvas({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onWheel={handleWheel}
-            onTouchStart={handleMouseDown}
-            onTouchMove={handleMouseMove}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
             onTouchEnd={handleMouseUp}
             ref={stageRef}
             scaleX={displayScale}

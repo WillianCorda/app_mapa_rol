@@ -10,7 +10,7 @@ const MapCanvas = dynamic(() => import("@/components/MapCanvas"), { ssr: false }
 const defaultView = { scale: 1, position: { x: 0, y: 0 }, containerWidth: undefined as number | undefined, containerHeight: undefined as number | undefined };
 
 export default function PlayerPage() {
-    const { socket } = useSocket();
+    const { socket, isConnected } = useSocket();
     const [activeMap, setActiveMap] = useState<any>(null);
     const [viewState, setViewState] = useState(defaultView);
     const [isLoading, setIsLoading] = useState(true);
@@ -51,15 +51,23 @@ export default function PlayerPage() {
                 });
             });
 
-            socket.on('map-view-update', ({ mapId, scale, position, containerWidth, containerHeight }) => {
+            socket.on('map-view-update', (data) => {
+                // We update the view state regardless of whether the map is already loaded locally
+                // because the GM might be panning while the player is still loading the image.
+                setViewState((v) => ({
+                    scale: data.scale ?? v.scale,
+                    position: data.position ?? v.position,
+                    containerWidth: data.containerWidth ?? v.containerWidth,
+                    containerHeight: data.containerHeight ?? v.containerHeight,
+                }));
+            });
+
+            socket.on('fow-update', ({ mapId, action }) => {
                 setActiveMap((prev: any) => {
-                    if (prev?._id === mapId) {
-                        setViewState((v) => ({
-                            scale: scale ?? v.scale,
-                            position: position ?? v.position,
-                            containerWidth: containerWidth ?? v.containerWidth,
-                            containerHeight: containerHeight ?? v.containerHeight,
-                        }));
+                    if (prev && prev._id === mapId) {
+                        // Avoid duplicates if possible, though IDs should be unique
+                        if (prev.fowInfo?.some((a: any) => a.id === action.id)) return prev;
+                        return { ...prev, fowInfo: [...(prev.fowInfo || []), action] };
                     }
                     return prev;
                 });
@@ -103,6 +111,14 @@ export default function PlayerPage() {
             ) : (
                 <div className="text-zinc-500">Esperando al GM...</div>
             )}
+
+            {/* Status indicator */}
+            <div className="fixed bottom-4 right-4 flex items-center gap-2 px-3 py-1 bg-zinc-900/80 rounded-full border border-zinc-800 pointer-events-none z-[100]">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
+                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-medium">
+                    {isConnected ? 'Sincronizado' : 'Reconectando...'}
+                </span>
+            </div>
         </div>
     );
 }

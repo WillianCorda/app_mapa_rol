@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { API_BASE } from "@/lib/api";
 
 let socket: Socket;
 
@@ -9,11 +10,8 @@ export const useSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
-        // Connect to backend. En producción define NEXT_PUBLIC_SOCKET_URL (o NEXT_PUBLIC_API_URL si usas la misma URL para todo).
-        const socketUrl =
-            process.env.NEXT_PUBLIC_SOCKET_URL ||
-            process.env.NEXT_PUBLIC_API_URL ||
-            "http://localhost:5000";
+        // Connect to backend
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || API_BASE;
 
         if (!socket) {
             socket = io(socketUrl);

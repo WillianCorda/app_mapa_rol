@@ -137,4 +137,16 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// Update map details (p. ej. renombrar)
+router.patch('/:id', async (req, res) => {
+    try {
+        const { name } = req.body;
+        const map = await Map.findByIdAndUpdate(req.params.id, { name }, { new: true });
+        if (!map) return res.status(404).json({ message: 'Map not found' });
+        res.json(map);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 module.exports = router;

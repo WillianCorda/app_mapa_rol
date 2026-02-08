@@ -128,6 +128,24 @@ export default function GMPage() {
         }
     };
 
+    const handleUpdateMap = async (id: string, updates: any) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/maps/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (!res.ok) throw new Error('Error al actualizar');
+            const updatedMap = await res.json();
+            setMaps(maps.map(m => m._id === id ? { ...m, ...updatedMap } : m));
+            if (activeMapId === id) {
+                setActiveMap((prev: any) => ({ ...prev, ...updatedMap }));
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handleFowDraw = (action: any) => {
         if (!activeMap) return;
 
@@ -176,6 +194,7 @@ export default function GMPage() {
                 onSelectMap={handleSelectMap}
                 onUploadMap={handleUploadMap}
                 onDeleteMap={handleDeleteMap}
+                onUpdateMap={handleUpdateMap}
                 onToggleFog={handleToggleFog}
                 onSetTool={setTool}
                 selectedTool={tool}
