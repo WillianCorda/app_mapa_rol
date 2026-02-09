@@ -1,58 +1,63 @@
 # Pathfinder Tabletop App
 
-Aplicación web para gestión de mapas y niebla de guerra en juegos de rol.
+Aplicación web profesional para la gestión de mapas, niebla de guerra y atmósfera sonora en sesiones de juegos de rol (TTRPG).
 
-## Requisitos Previos
+## ✨ Características Principales
 
-- Node.js instalado.
-- MongoDB instalado y corriendo en `mongodb://localhost:27017` (o configurar `.env`).
+### 🗺️ Sistema de Mapas e Inmersión
+- **Soporte Multiformato:** Carga imágenes (JPG, PNG), videos (MP4, WebM) y **GIFs animados** para dar vida a tus escenarios.
+- **Niebla de Guerra Dinámica:** Herramientas de pincel y borrador con formas circulares o cuadradas y tamaños ajustables.
+- **Sincronización Total:** Los jugadores ven en tiempo real lo que el GM revela, manteniendo la misma escala y encuadre.
+- **Herramientas de GM:** Zoom, paneo y centrado rápido del mapa.
 
-## Instalación y Ejecución
+### 🔊 Atmósfera Sonora (Centro de Audio)
+- **Música Ambiental:** Sistema de reproducción continua con funciones de Pausa/Reanudar y Parada total.
+- **Efectos de Sonido (SFX):** Parrilla de acceso rápido para disparar efectos (explosiones, hechizos, ruidos ambientales) con un solo clic.
+- **Mezcla de Audio:** Control de volumen independiente para ambiente y efectos de sonido.
+- **Gestión de Biblioteca:** Sube tus propios archivos de audio, renómbralos o eliminalos directamente desde la interfaz.
+
+## 🚀 Instalación y Ejecución
 
 La aplicación consta de dos partes: Backend (API + WebSocket) y Frontend (Next.js Client).
 
+### Requisitos Previos
+- Node.js (v18 o superior).
+- MongoDB (Local o Atlas).
+
 ### 1. Iniciar Backend
-
-El backend maneja la subida de mapas y la sincronización en tiempo real.
-
 ```bash
 cd backend
 npm install
 npm run dev
 ```
-
-El servidor correrá en `http://localhost:5000`.
+El servidor correrá en `http://localhost:5000`. No olvides configurar tu `.env` con la `MONGODB_URI`.
 
 ### 2. Iniciar Frontend
-
-El frontend es la interfaz de usuario para el GM y los jugadores.
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+La interfaz estará disponible en `http://localhost:3000`.
 
-La aplicación estará disponible en `http://localhost:3000`.
+## 🎮 Guía de Uso
 
-## Uso
+### 🧙‍♂️ Panel del Game Master (GM)
+1. **Biblioteca de Mapas:** Sube tus archivos. Usa el icono de **Monitor** para activar un mapa para los jugadores.
+2. **Control de Niebla:** 
+   - **Revelar (Borrador):** Elimina la niebla para mostrar el mapa.
+   - **Cubrir (Pincel):** Añade niebla para ocultar zonas.
+   - **Acciones Rápidas:** Botones para limpiar toda la niebla o cubrir el mapa por completo.
+3. **Gestión de Audio:** 
+   - Cambia entre las pestañas de Mapas y Sonidos en el lateral izquierdo.
+   - Usa el **Lápiz** para organizar y renombrar tus pistas con nombres épicos.
 
-1. **Vista del Game Master (GM):**
-   - Ve a `http://localhost:3000` y selecciona "Game Master".
-   - Sube una imagen o video de mapa usando el panel lateral.
-   - Selecciona el mapa de la lista.
-   - Haz clic en el icono de "Monitor" en la lista de mapas para activarlo para los jugadores.
-   - Usa las herramientas (Pincel, Borrador) para modificar la Niebla de Guerra.
-     - **Pincel:** Agrega niebla (cubre el mapa).
-     - **Borrador:** Quita niebla (revela el mapa).
-     - **Botones de Papelera/Maximizar:** Limpian o cubren todo el mapa.
+### 🛡️ Vista del Jugador
+- Los jugadores solo ven el mapa que el GM ha marcado como **activo**.
+- La niebla es opaca para ellos (seguridad total contra spoilers).
+- El audio está optimizado para que el GM lo gestione desde su panel (evitando ecos en la misma red).
 
-2. **Vista del Jugador:**
-   - Ve a `http://localhost:3000` y selecciona "Jugador".
-   - Verás el mapa activo en tiempo real.
-   - La niebla será totalmente negra (no transparente).
-
-## Tecnologías
-
-- **Frontend:** Next.js 14, React, TailwindCSS, Shadcn UI, React Konva.
-- **Backend:** Node.js, Express, Socket.io, Mongoose (MongoDB).
+## 🛠️ Tecnologías
+- **Frontend:** Next.js 14, React, TailwindCSS, Shadcn UI, React Konva (Lienzo 2D).
+- **Backend:** Node.js, Express, Socket.io (Tiempo Real), Mongoose (MongoDB).
+- **Audio:** HTML5 Audio API con gestión avanzada de promesas y buffers.

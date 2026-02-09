@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { Stage, Layer, Image as KonvaImage, Line, Rect, Group } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Line, Rect, Group, Circle } from 'react-konva';
 import useImage from 'use-image';
 import Konva from 'konva';
 
@@ -11,6 +11,7 @@ export type FowAction = {
     points?: number[];
     size?: number;
     id: string;
+    brushShape?: 'round' | 'square';
     /** Si true, points y size están en coordenadas normalizadas (0–1) para que coincidan en GM y jugador */
     normalized?: boolean;
 };
@@ -44,6 +45,7 @@ interface MapCanvasProps {
     // Interaction props (GM only)
     selectedTool?: 'brush' | 'eraser';
     brushSize?: number;
+    brushShape?: 'round' | 'square';
     onFowDraw?: (action: FowAction) => void;
 }
 
@@ -70,15 +72,27 @@ const URLImage = ({
     src,
     rect,
     onNaturalSize,
+    layerRef,
 }: {
     src: string;
     rect: { x: number; y: number; w: number; h: number };
     onNaturalSize?: (w: number, h: number) => void;
+    layerRef?: React.RefObject<Konva.Layer | null>;
 }) => {
     const [image] = useImage(src, 'anonymous');
+    const isGif = src.toLowerCase().endsWith('.gif');
     React.useEffect(() => {
         if (image && onNaturalSize) onNaturalSize(image.naturalWidth || 0, image.naturalHeight || 0);
-    }, [image, onNaturalSize]);
+
+        let anim: Konva.Animation | null = null;
+        if (isGif && image && layerRef?.current) {
+            anim = new Konva.Animation(() => { }, layerRef.current);
+            anim.start();
+        }
+        return () => {
+            if (anim) anim.stop();
+        };
+    }, [image, onNaturalSize, isGif, layerRef]);
     if (!image) return null;
     return (
         <KonvaImage image={image} x={rect.x} y={rect.y} width={rect.w} height={rect.h} />
@@ -158,6 +172,7 @@ export default function MapCanvas({
     centerTrigger,
     selectedTool,
     brushSize = 50,
+    brushShape = 'round',
     onFowDraw
 }: MapCanvasProps) {
     const isDrawing = useRef(false);
@@ -168,6 +183,7 @@ export default function MapCanvas({
 
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [cursorPos, setCursorPos] = useState<{ x: number, y: number } | null>(null);
     const isPanning = useRef(false);
     const lastPanPosition = useRef({ x: 0, y: 0 });
     const viewSyncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -291,7 +307,7 @@ export default function MapCanvas({
 
         setScale(clampedScale);
         setPosition(newPos);
-        onViewChange?.({ scale: clampedScale, position: newPos });
+        emitViewChange(clampedScale, newPos);
     };
 
     const getDistance = (p1: { x: number, y: number }, p2: { x: number, y: number }) => {
@@ -340,6 +356,7 @@ export default function MapCanvas({
             points: [normX, normY],
             size: mapRect.w > 0 ? brushSize / mapRect.w : 0,
             id: `${Date.now()}-${Math.random()}`,
+            brushShape: brushShape,
             normalized: true,
         };
         setCurrentLine(newAction);
@@ -378,6 +395,19 @@ export default function MapCanvas({
         const stage = e.target.getStage();
         const point = stage?.getPointerPosition();
         if (!point) return;
+
+        // Convert raw pointer position to logical stage position (accounting for zoom/pan)
+        const logicalPoint = {
+            x: (point.x - displayPosition.x) / displayScale,
+            y: (point.y - displayPosition.y) / displayScale
+        };
+
+        // Update cursor preview position
+        if (isGm && !panMode) {
+            setCursorPos(logicalPoint);
+        } else {
+            setCursorPos(null);
+        }
 
         if (syncScale === undefined && isPanning.current) {
             const dx = point.x - lastPanPosition.current.x;
@@ -524,6 +554,7 @@ export default function MapCanvas({
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleMouseUp}
+            onMouseLeave={() => setCursorPos(null)}
             ref={stageRef}
             scaleX={displayScale}
             scaleY={displayScale}
@@ -537,7 +568,7 @@ export default function MapCanvas({
                 {mapType === 'video' ? (
                     <VideoFrame src={mapUrl} rect={mapRect} layerRef={mapLayerRef} onNaturalSize={reportNaturalSize} />
                 ) : (
-                    <URLImage src={mapUrl} rect={mapRect} onNaturalSize={reportNaturalSize} />
+                    <URLImage src={mapUrl} rect={mapRect} layerRef={mapLayerRef} onNaturalSize={reportNaturalSize} />
                 )}
             </Layer>
 
@@ -585,9 +616,9 @@ export default function MapCanvas({
                                 points={points}
                                 stroke="black"
                                 strokeWidth={strokeWidth}
-                                tension={0.5}
-                                lineCap="round"
-                                lineJoin="round"
+                                tension={action.brushShape === 'square' ? 0 : 0.5}
+                                lineCap={action.brushShape === 'square' ? 'square' : 'round'}
+                                lineJoin={action.brushShape === 'square' ? 'miter' : 'round'}
                                 globalCompositeOperation={
                                     action.tool === 'brush' ? 'source-over' : 'destination-out'
                                 }
@@ -596,6 +627,61 @@ export default function MapCanvas({
                     })}
                 </Group>
             </Layer>
+
+            {/* GM Overlay: Brush Cursor Preview */}
+            {isGm && cursorPos && !panMode && selectedTool && (
+                <Layer>
+                    {brushShape === 'round' ? (
+                        <>
+                            <Circle
+                                x={cursorPos.x}
+                                y={cursorPos.y}
+                                radius={brushSize / 2}
+                                stroke="white"
+                                strokeWidth={1 / displayScale}
+                                dash={[5, 5]}
+                                listening={false}
+                                shadowColor="black"
+                                shadowBlur={2}
+                                shadowOpacity={0.8}
+                            />
+                            <Circle
+                                x={cursorPos.x}
+                                y={cursorPos.y}
+                                radius={brushSize / 2}
+                                stroke="rgba(59, 130, 246, 0.5)"
+                                strokeWidth={4 / displayScale}
+                                listening={false}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <Rect
+                                x={cursorPos.x - brushSize / 2}
+                                y={cursorPos.y - brushSize / 2}
+                                width={brushSize}
+                                height={brushSize}
+                                stroke="white"
+                                strokeWidth={1 / displayScale}
+                                dash={[5, 5]}
+                                listening={false}
+                                shadowColor="black"
+                                shadowBlur={2}
+                                shadowOpacity={0.8}
+                            />
+                            <Rect
+                                x={cursorPos.x - brushSize / 2}
+                                y={cursorPos.y - brushSize / 2}
+                                width={brushSize}
+                                height={brushSize}
+                                stroke="rgba(59, 130, 246, 0.5)"
+                                strokeWidth={4 / displayScale}
+                                listening={false}
+                            />
+                        </>
+                    )}
+                </Layer>
+            )}
         </Stage>
     );
 

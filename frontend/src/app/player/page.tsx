@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useSocket } from "@/hooks/useSocket";
 import { API_BASE, mapAssetUrl } from "@/lib/api";
@@ -14,6 +14,8 @@ export default function PlayerPage() {
     const [activeMap, setActiveMap] = useState<any>(null);
     const [viewState, setViewState] = useState(defaultView);
     const [isLoading, setIsLoading] = useState(true);
+    const ambientAudio = useRef<HTMLAudioElement | null>(null);
+    const sfxAudio = useRef<HTMLAudioElement | null>(null);
 
     const fetchActiveMap = async () => {
         setIsLoading(true);
@@ -42,14 +44,6 @@ export default function PlayerPage() {
                 fetchActiveMap();
             });
 
-            socket.on('fow-update', ({ mapId, action }) => {
-                setActiveMap((prev: any) => {
-                    if (prev?._id === mapId) {
-                        return { ...prev, fowInfo: [...(prev.fowInfo || []), action] };
-                    }
-                    return prev;
-                });
-            });
 
             socket.on('map-view-update', (data) => {
                 // We update the view state regardless of whether the map is already loaded locally
@@ -72,6 +66,75 @@ export default function PlayerPage() {
                     return prev;
                 });
             });
+
+            /* Disabling sound for player view as requested
+            socket.on('sound-play', (data) => {
+                console.log('Playing sound:', data);
+                if (data.category === 'ambient') {
+                    if (ambientAudio.current) {
+                        ambientAudio.current.pause();
+                        ambientAudio.current = null;
+                    }
+                    const audio = new Audio(data.url);
+                    audio.loop = true;
+                    audio.volume = data.volume || 0.5;
+                    audio.play().catch(e => console.error("Error autoplaying ambient:", e));
+                    ambientAudio.current = audio;
+                } else {
+                    if (sfxAudio.current) {
+                        sfxAudio.current.pause();
+                        sfxAudio.current = null;
+                    }
+                    const audio = new Audio(data.url);
+                    audio.volume = data.volume || 0.7;
+                    audio.onended = () => { sfxAudio.current = null; };
+                    audio.play().catch(e => console.error("Error playing SFX:", e));
+                    sfxAudio.current = audio;
+                }
+            });
+
+            socket.on('volume-update', (data: { category: 'ambient' | 'sfx', volume: number }) => {
+                if (data.category === 'ambient' && ambientAudio.current) {
+                    ambientAudio.current.volume = data.volume;
+                } else if (data.category === 'sfx' && sfxAudio.current) {
+                    sfxAudio.current.volume = data.volume;
+                }
+            });
+
+            socket.on('sound-pause', (data: { category: 'ambient' | 'sfx' }) => {
+                if (data.category === 'ambient' && ambientAudio.current) {
+                    ambientAudio.current.pause();
+                } else if (data.category === 'sfx' && sfxAudio.current) {
+                    sfxAudio.current.pause();
+                }
+            });
+
+            socket.on('sound-resume', (data: { category: 'ambient' | 'sfx' }) => {
+                if (data.category === 'ambient' && ambientAudio.current) {
+                    ambientAudio.current.play().catch(e => console.error("Error resuming:", e));
+                } else if (data.category === 'sfx' && sfxAudio.current) {
+                    sfxAudio.current.play().catch(e => console.error("Error resuming:", e));
+                }
+            });
+
+            socket.on('sound-stop', (data: { category: 'ambient' | 'sfx', id?: string }) => {
+                if (data.category === 'ambient') {
+                    if (ambientAudio.current) {
+                        ambientAudio.current.pause();
+                        ambientAudio.current.src = "";
+                        ambientAudio.current.load();
+                        ambientAudio.current = null;
+                    }
+                } else if (data.category === 'sfx') {
+                    if (sfxAudio.current) {
+                        sfxAudio.current.pause();
+                        sfxAudio.current.src = "";
+                        sfxAudio.current.load();
+                        sfxAudio.current = null;
+                    }
+                }
+            });
+            */
         }
 
         return () => {
@@ -79,6 +142,19 @@ export default function PlayerPage() {
                 socket.off('map-change');
                 socket.off('fow-update');
                 socket.off('map-view-update');
+                socket.off('sound-play');
+                socket.off('sound-stop');
+                socket.off('sound-pause');
+                socket.off('sound-resume');
+                socket.off('volume-update');
+            }
+            if (ambientAudio.current) {
+                ambientAudio.current.pause();
+                ambientAudio.current = null;
+            }
+            if (sfxAudio.current) {
+                sfxAudio.current.pause();
+                sfxAudio.current = null;
             }
         }
     }, [socket]);

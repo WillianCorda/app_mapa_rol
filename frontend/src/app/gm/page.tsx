@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 // We need to disable SSR for Konva components to avoid "window is not defined" or canvas issues
 import dynamic from "next/dynamic";
 import Sidebar from "@/components/Sidebar";
@@ -16,14 +16,60 @@ export default function GMPage() {
     const [activeMap, setActiveMap] = useState<any>(null);
     const [tool, setTool] = useState<'brush' | 'eraser'>('brush');
     const [brushSize, setBrushSize] = useState(50);
+    const [brushShape, setBrushShape] = useState<'round' | 'square'>('round');
     const [panMode, setPanMode] = useState(true);
     const [centerTrigger, setCenterTrigger] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'maps' | 'sounds' | 'settings' | null>('maps');
 
-    // Fetch maps on load
+    // Sounds State
+    const [sounds, setSounds] = useState<any[]>([]);
+    const [playingAmbientId, setPlayingAmbientId] = useState<string | null>(null);
+    const [isAmbientPaused, setIsAmbientPaused] = useState(false);
+    const [volume, setVolume] = useState(0.5); // This will be Ambient Volume
+    const [sfxVolume, setSfxVolume] = useState(0.7);
+    const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
+
+    const ambientAudio = useRef<HTMLAudioElement | null>(null);
+    const sfxAudio = useRef<HTMLAudioElement | null>(null);
+
+    const ambientPlayPromise = useRef<Promise<void> | null>(null);
+
+    // Update volume of current ambient if playing
+    useEffect(() => {
+        if (ambientAudio.current) {
+            ambientAudio.current.volume = volume;
+        }
+        if (socket) {
+            socket.emit('volume-update', { category: 'ambient', volume });
+        }
+    }, [volume, socket]);
+
+    // Update volume of all active SFX
+    useEffect(() => {
+        if (sfxAudio.current) {
+            sfxAudio.current.volume = sfxVolume;
+        }
+        if (socket) {
+            socket.emit('volume-update', { category: 'sfx', volume: sfxVolume });
+        }
+    }, [sfxVolume, socket]);
+
+    // Fetch maps & sounds on load
     useEffect(() => {
         fetchMaps();
+        fetchSounds();
     }, []);
+
+    const fetchSounds = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/sounds`);
+            const data = await res.json();
+            setSounds(data);
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const fetchMaps = async () => {
         try {
@@ -67,6 +113,7 @@ export default function GMPage() {
 
         const file = e.target.files[0];
         const isVideo = file.type.startsWith('video/');
+        const isGif = file.type === 'image/gif';
         const formData = new FormData();
         formData.append('file', file);
         formData.append('name', file.name.split('.')[0]);
@@ -146,6 +193,183 @@ export default function GMPage() {
         }
     };
 
+    // --- Sound Handlers ---
+
+    const handleUploadSound = async (e: React.ChangeEvent<HTMLInputElement>, category: 'ambient' | 'sfx') => {
+        if (!e.target.files?.[0]) return;
+        const file = e.target.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name.split('.')[0]);
+        formData.append('category', category);
+
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/sounds`, {
+                method: 'POST',
+                body: formData
+            });
+            const newSound = await res.json();
+            setSounds(prev => [newSound, ...prev]);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteSound = async (id: string) => {
+        try {
+            await fetch(`${API_BASE}/api/sounds/${id}`, { method: 'DELETE' });
+            setSounds(prev => prev.filter(s => s._id !== id));
+            if (playingAmbientId === id) handleStopSound('ambient');
+            if (playingSfxId === id) handleStopSound('sfx');
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleUpdateSound = async (id: string, updates: any) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/sounds/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (!res.ok) throw new Error('Error al actualizar');
+            const updatedSound = await res.json();
+            setSounds(prev => prev.map(s => s._id === id ? { ...s, ...updatedSound } : s));
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handlePlaySound = async (sound: any) => {
+        if (sound.category === 'ambient') {
+            // If it's the same sound and it's paused, resume it
+            if (playingAmbientId === sound._id && isAmbientPaused && ambientAudio.current) {
+                try {
+                    ambientAudio.current.volume = volume; // Restore volume
+                    ambientPlayPromise.current = ambientAudio.current.play();
+                    await ambientPlayPromise.current;
+                    setIsAmbientPaused(false);
+                    if (socket) socket.emit('sound-resume', { category: 'ambient' });
+                } catch (e) {
+                    console.error("Resume error:", e);
+                }
+                return;
+            }
+
+            // Stop current ambient aggressively
+            if (ambientAudio.current) {
+                ambientAudio.current.pause();
+                ambientAudio.current.src = "";
+                ambientAudio.current.load();
+                ambientAudio.current = null;
+            }
+
+            // Play new
+            const audio = new Audio(mapAssetUrl(sound.url));
+            audio.loop = true;
+            audio.volume = volume;
+            ambientAudio.current = audio;
+            setPlayingAmbientId(sound._id);
+            setIsAmbientPaused(false);
+
+            try {
+                ambientPlayPromise.current = audio.play();
+                await ambientPlayPromise.current;
+            } catch (e) {
+                console.error("Playback error:", e);
+            }
+
+            // Broadcast
+            if (socket) {
+                socket.emit('sound-play', {
+                    id: sound._id,
+                    url: mapAssetUrl(sound.url),
+                    category: 'ambient',
+                    loop: true,
+                    volume: volume
+                });
+            }
+        } else {
+            // SFX: Stop current if any
+            if (sfxAudio.current) {
+                sfxAudio.current.pause();
+                sfxAudio.current.src = "";
+                sfxAudio.current.load();
+                sfxAudio.current = null;
+            }
+
+            // Play new
+            const audio = new Audio(mapAssetUrl(sound.url));
+            audio.volume = sfxVolume;
+            audio.onended = () => {
+                setPlayingSfxId(null);
+                sfxAudio.current = null;
+            };
+
+            try {
+                await audio.play();
+            } catch (e) {
+                console.error("SFX Playback error:", e);
+            }
+            sfxAudio.current = audio;
+            setPlayingSfxId(sound._id);
+
+            if (socket) {
+                socket.emit('sound-play', {
+                    id: sound._id,
+                    url: mapAssetUrl(sound.url),
+                    category: 'sfx',
+                    loop: false,
+                    volume: sfxVolume
+                });
+            }
+        }
+    };
+
+    const handleStopSound = (category: 'ambient' | 'sfx', id?: string) => {
+        if (category === 'ambient') {
+            if (ambientAudio.current) {
+                ambientAudio.current.pause();
+                ambientAudio.current.src = "";
+                ambientAudio.current.load();
+                ambientAudio.current = null;
+            }
+            setPlayingAmbientId(null);
+            setIsAmbientPaused(false);
+            if (socket) socket.emit('sound-stop', { category: 'ambient' });
+        } else if (category === 'sfx') {
+            if (sfxAudio.current) {
+                sfxAudio.current.pause();
+                sfxAudio.current.src = "";
+                sfxAudio.current.load();
+                sfxAudio.current = null;
+            }
+            setPlayingSfxId(null);
+            if (socket) socket.emit('sound-stop', { category: 'sfx' });
+        }
+    };
+
+    const handlePauseSound = async (category: 'ambient') => {
+        if (category === 'ambient' && ambientAudio.current) {
+            try {
+                // Wait for any pending play to finish before pausing
+                if (ambientPlayPromise.current) {
+                    await ambientPlayPromise.current;
+                }
+                ambientAudio.current.volume = 0; // Absolute silence
+                ambientAudio.current.pause();
+                setIsAmbientPaused(true);
+                if (socket) socket.emit('sound-pause', { category: 'ambient' });
+            } catch (e) {
+                console.error("Pause error:", e);
+            }
+        }
+    };
+
     const handleFowDraw = (action: any) => {
         if (!activeMap) return;
 
@@ -186,9 +410,13 @@ export default function GMPage() {
         handleFowDraw(action);
     };
 
+    const sidebarWidth = activeTab ? 384 : 64; // 80 (w-80 panel) + 64 (w-16 dock) = 384px
+
     return (
-        <div className="flex h-screen w-screen bg-black overflow-hidden relative">
+        <div className="h-screen w-screen bg-black overflow-hidden relative">
             <Sidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
                 maps={maps}
                 activeMapId={activeMapId}
                 onSelectMap={handleSelectMap}
@@ -200,13 +428,35 @@ export default function GMPage() {
                 selectedTool={tool}
                 brushSize={brushSize}
                 onSetBrushSize={setBrushSize}
+                brushShape={brushShape}
+                onSetBrushShape={setBrushShape}
                 onActivateMap={handleActivateMap}
                 panMode={panMode}
                 onSetPanMode={setPanMode}
                 onCenterMap={() => setCenterTrigger((t) => t + 1)}
+                sounds={sounds}
+                onUploadSound={handleUploadSound}
+                onDeleteSound={handleDeleteSound}
+                onUpdateSound={handleUpdateSound}
+                onPlaySound={handlePlaySound}
+                onPauseSound={handlePauseSound}
+                onStopSound={handleStopSound}
+                playingAmbientId={playingAmbientId}
+                isAmbientPaused={isAmbientPaused}
+                playingSfxId={playingSfxId}
+                volume={volume}
+                onSetVolume={setVolume}
+                sfxVolume={sfxVolume}
+                onSetSfxVolume={setSfxVolume}
             />
 
-            <main className="flex-1 ml-16 relative">
+            <main
+                className="absolute inset-0 z-0 transition-all duration-500 ease-in-out"
+                style={{
+                    width: '100vw',
+                    transform: `translateX(${activeTab ? '384px' : '0px'})`,
+                }}
+            >
                 {activeMap ? (
                     <MapCanvas
                         mapUrl={mapAssetUrl(activeMap.url)}
@@ -216,6 +466,7 @@ export default function GMPage() {
                         initialView={activeMap.viewState}
                         selectedTool={tool}
                         brushSize={brushSize}
+                        brushShape={brushShape}
                         onFowDraw={handleFowDraw}
                         panMode={panMode}
                         centerTrigger={centerTrigger}
