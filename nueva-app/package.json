@@ -1,0 +1,71 @@
+{
+  "name": "hexara-interactive-rol-map",
+  "version": "1.0.0",
+  "description": "Hexara Interactive Rol Map - App de escritorio",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_DEV=1 electron .\"",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "node -e \"try{require('fs').rmSync('dist-electron',{recursive:true,force:true})}catch(e){}\" && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
+    "dist:win:signed": "npm run build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.hexara.interactiverolmap",
+    "productName": "Hexara Interactive Rol Map",
+    "directories": { "output": "dist-electron" },
+    "files": ["dist/**/*", "electron/**/*", "Hexara.ico", "Hexara.png"],
+    "icon": "Hexara.ico",
+    "win": {
+      "target": ["nsis", "zip"],
+      "icon": "Hexara.ico",
+      "signAndEditExecutable": false,
+      "publisherName": "Hexara"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "Hexara.ico",
+      "uninstallerIcon": "Hexara.ico",
+      "installerHeaderIcon": "Hexara.ico",
+      "shortcutName": "Hexara"
+    }
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "konva": "^10.2.0",
+    "lucide-react": "^0.563.0",
+    "multer": "^2.0.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-konva": "^19.2.2",
+    "react-router-dom": "^7.0.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^3.4.0",
+    "tone": "^15.0.4",
+    "use-image": "^1.1.4",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.0"
+  }
+}

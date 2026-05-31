@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 0.625rem;
+}
+
+body {
+  margin: 0;
+  font-family: 'Cinzel', serif;
+  -webkit-font-smoothing: antialiased;
+  background: #0a0a0a;
+  color: #fafafa;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Scrollbar moderna (sin flechas Windows): aplicar a contenedores con clase .scroll-custom */
+.scroll-custom {
+  scrollbar-width: thin;
+  scrollbar-color: #52525b transparent;
+}
+
+.scroll-custom::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-custom::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+.scroll-custom::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-custom::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-radius: 3px;
+}
+
+.scroll-custom::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
+.scroll-custom::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Splash de inicio: logo Hexara */
+@keyframes splash-logo {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-splash-logo {
+  animation: splash-logo 0.6s ease-out both;
+}
+
+/* Título medieval con relieve (pantalla de bienvenida) */
+.font-medieval {
+  font-family: 'Cinzel', serif;
+}
+.text-relief-medieval {
+  color: #e4dcc4;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.8),
+    0 2px 2px rgba(0, 0, 0, 0.6),
+    1px 2px 2px rgba(0, 0, 0, 0.5),
+    -1px -1px 0 rgba(255, 255, 255, 0.08),
+    0 -1px 1px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.08em;
+}
+
+/* Transición rápida entre vistas (bienvenida, GM, jugador, etc.) */
+@keyframes route-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-route-in {
+  opacity: 0;
+  animation: route-in 0.28s ease-out forwards;
+}
+
+/* Selectores de voz del narrador: fondo oscuro y texto claro en el desplegable */
+.voice-select {
+  background-color: #27272a !important;
+  color: #fafafa !important;
+}
+.voice-select option {
+  background-color: #27272a;
+  color: #fafafa;
+}
