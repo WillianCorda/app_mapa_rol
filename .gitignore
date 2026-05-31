@@ -1,3 +1,6 @@
+# Old versions / large build artifacts
+hexara_v1/
+
 # Dependencies
 node_modules/
 nueva-app/node_modules/
